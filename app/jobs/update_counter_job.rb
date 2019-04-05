@@ -2,12 +2,18 @@ class UpdateCounterJob < ActiveJob::Base
   queue_as :my_jobs
 
   def perform()
-    number = Impression.count
+    number = impression_count
     return if multiple_draw_jobs_queued
     number = add_zeros(number)
     draw_commands = process_draw_commands(number)
     response = call_binary(draw_commands)
     write_file(response)
+  end
+
+  def impression_count
+    sql = 'SELECT COUNT(*) FROM "impressions"'
+    records_array = ActiveRecord::Base.connection.execute(sql)
+    records_array.values[0][0]
   end
 
   def process_draw_commands number
