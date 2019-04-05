@@ -1,4 +1,7 @@
-<h1>Pages#home</h1>
-<p>Find me in app/views/pages/home.html.erb</p>
-  hello
+<h1>Binary-Drawn Page Counter</h1>
+<p>Skipio Technical Assessment</p>
+<p>By Mark Donahue</p>
+<p>Each time this page is loaded, it triggers a Delayed Job to redraw the counter based on the number of impressions recorded by the gem Impressionist. If there are multiple draw jobs in the queue, all jobs but the newest are deleted so that we don't waste time drawing and deleting the counter.</p>
+<p>The drawing binary is triggered via a Faraday POST request.</p>
+<p>The number of views is capped at 9999, but it would be possible to dynamically resize the canvas.</p>
 <%= image_tag("/counter/image.png", alt: "Calculating page views...") %>
