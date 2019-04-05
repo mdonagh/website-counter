@@ -1,19 +1,31 @@
-namespace :draw do
-  desc "Uses an image binary to draw a number"
+class UpdateCounterJob < ActiveJob::Base
+  queue_as :my_jobs
 
-  task draw_number: :environment do
-    number = 1134
+  def perform()
+    number = Impression.count
+    return if multiple_draw_jobs_queued
     number = add_zeros(number)
-    if number.length > 4
-      number = "9999"
-    end
-    draw_commands = draw_canvas_body
-    number.each_char.with_index do |digit, digit_index|
-      draw_commands.concat(draw_commands_for_digit(digit, digit_index))
-    end
-    draw_commands = finish_draw_commands(draw_commands)
+    draw_commands = process_draw_commands(number)
     response = call_binary(draw_commands)
     write_file(response)
+  end
+
+  def process_draw_commands number
+    draw_commands = draw_canvas_body
+    draw_commands.concat(number
+                          .split('')
+                          .each_with_index.map { |digit, digit_index| draw_commands_for_digit(digit, digit_index) }
+                          .join('')
+                        )
+    finish_draw_commands(draw_commands)
+  end
+
+  def multiple_draw_jobs_queued
+    if Delayed::Job.count > 1 
+      Delayed::Job.where.not(id: Delayed::Job.last.id).destroy_all
+      return true
+    end
+    false
   end
 
   def index_to_starting_x_coordinate digit
@@ -33,10 +45,14 @@ namespace :draw do
 
   def add_zeros number
     number = number.to_s
+    if number.length > 4
+      return "9999"
+    end
+
     while(number.length < 4)
       number.prepend("0")
     end
-    return number
+    number
   end
 
   def finish_draw_commands draw_commands
@@ -49,33 +65,35 @@ namespace :draw do
 
     case digit
       when 0
-        return draw_zero_body(starting_x)
+        draw_commands = draw_zero_body(starting_x)
       when 1
-        return draw_one_body(starting_x)
+        draw_commands = draw_one_body(starting_x)
       when 2
-        return draw_two_body(starting_x)
+        draw_commands = draw_two_body(starting_x)
       when 3
-        return draw_three_body(starting_x)
+        draw_commands = draw_three_body(starting_x)
       when 4
-        return draw_four_body(starting_x)
+        draw_commands = draw_four_body(starting_x)
       when 5
-        return draw_five_body(starting_x)
+        draw_commands = draw_five_body(starting_x)
       when 6
-        return draw_six_body(starting_x)
+        draw_commands = draw_six_body(starting_x)
       when 7
-        return draw_seven_body(starting_x)
+        draw_commands = draw_seven_body(starting_x)
       when 8
-        return draw_eight_body(starting_x)
+        draw_commands = draw_eight_body(starting_x)
       when 9
-        return draw_nine_body(starting_x)
+        draw_commands = draw_nine_body(starting_x)
       else
         puts "Error: invalid digit: (#{digit})"
       end
+      draw_commands.gsub!("'", '"')
     end
 
   def write_file response
-    File.delete(Rails.root.join('public', 'image.png')) if File.exist?(Rails.root.join('public', 'image.png'))
-    File.open(Rails.root.join('public', 'image.png'), 'wb') { |fp| fp.write(response.body) }
+    File.open(Rails.root.join('public', 'counter', 'new_image.png'), 'wb') { |fp| fp.write(response.body) }
+    File.delete(Rails.root.join('public', 'counter', 'image.png')) if File.exist?(Rails.root.join('public', 'image.png'))
+    File.rename(Rails.root.join('public', 'counter', 'new_image.png'), Rails.root.join('public', 'counter', 'image.png'))
   end
 
   def call_binary draw_body
@@ -95,93 +113,83 @@ namespace :draw do
 
   def draw_nine_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 180, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{ending_x}, 100]},"
-    body.gsub!("'", '"')
   end
 
   def draw_eight_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 180, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{ending_x}, 100]},"
-    body.gsub!("'", '"')
   end
 
   def draw_seven_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'Stroke'}"
-    body.gsub!("'", '"')
   end
 
   def draw_six_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{ending_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 180, #{starting_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{starting_x}, 180]},"
-    body.gsub!("'", '"')
   end
 
   def draw_five_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{ending_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 180, #{starting_x}, 180]},"
-    body.gsub!("'", '"')
   end
 
   def draw_four_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{ending_x}, 180]},"
-    body.gsub!("'", '"')
   end
 
   def draw_three_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 180, #{ending_x}, 180]},"
-    body.gsub!("'", '"')
   end
 
   def draw_two_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 100, #{starting_x}, 100]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 100, #{starting_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 180, #{ending_x}, 180]},"
-    body.gsub!("'", '"')
   end
 
   def draw_one_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},"
-    body.gsub!("'", '"')
+    return "{'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},"
   end
 
   def draw_zero_body starting_x
     ending_x = starting_x + 60
-    body = "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 180]},
+    return "{'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{starting_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{ending_x}, 20, #{ending_x}, 180]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 20, #{ending_x}, 20]},
     {'cmd': 'DrawLine', 'args':[#{starting_x}, 180, #{ending_x}, 180]},"
-    body.gsub!("'", '"')
   end
 end
